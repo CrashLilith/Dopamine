@@ -92,10 +92,31 @@
             [self.navigationController pushViewController:[[DOSettingsController alloc] init] animated:YES];
         }],
         [UIAction actionWithTitle:DOLocalizedString(@"Menu_Restart_SpringBoard_Title") image:[UIImage systemImageNamed:@"arrow.clockwise" withConfiguration:[DOGlobalAppearance smallIconImageConfiguration]] identifier:@"respring" handler:^(__kindof UIAction * _Nonnull action) {
-            // No-op in visual mode
+            // Simulate respring: instant black screen like real SpringBoard restart
+            UIWindow *blackWindow = [[UIWindow alloc] initWithFrame:[UIScreen mainScreen].bounds];
+            blackWindow.backgroundColor = [UIColor blackColor];
+            blackWindow.windowLevel = UIWindowLevelAlert + 100;
+            blackWindow.hidden = NO;
+            [blackWindow makeKeyAndVisible];
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(5.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+                exit(0);
+            });
         }],
         [UIAction actionWithTitle:DOLocalizedString(@"Menu_Reboot_Userspace_Title") image:[UIImage systemImageNamed:@"arrow.clockwise.circle" withConfiguration:[DOGlobalAppearance smallIconImageConfiguration]] identifier:@"reboot-userspace" handler:^(__kindof UIAction * _Nonnull action) {
-            // No-op in visual mode
+            // Simulate userspace reboot: black screen with spinner like real reboot
+            UIWindow *blackWindow = [[UIWindow alloc] initWithFrame:[UIScreen mainScreen].bounds];
+            blackWindow.backgroundColor = [UIColor blackColor];
+            blackWindow.windowLevel = UIWindowLevelAlert + 100;
+            UIActivityIndicatorView *spinner = [[UIActivityIndicatorView alloc] initWithActivityIndicatorStyle:UIActivityIndicatorViewStyleLarge];
+            spinner.color = [UIColor whiteColor];
+            spinner.center = CGPointMake(blackWindow.bounds.size.width / 2, blackWindow.bounds.size.height / 2);
+            [spinner startAnimating];
+            [blackWindow addSubview:spinner];
+            blackWindow.hidden = NO;
+            [blackWindow makeKeyAndVisible];
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(8.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+                exit(0);
+            });
         }],
         [UIAction actionWithTitle:DOLocalizedString(@"Menu_Credits_Title") image:[UIImage systemImageNamed:@"info.circle" withConfiguration:[DOGlobalAppearance smallIconImageConfiguration]] identifier:@"credits" handler:^(__kindof UIAction * _Nonnull action) {
             [self.navigationController pushViewController:[[DOCreditsViewController alloc] init] animated:YES];
@@ -255,6 +276,8 @@
         [NSThread sleepForTimeInterval:2.0 + (0.5 * (double)arc4random() / UINT32_MAX)];
         [uiManager sendLog:DOLocalizedString(@"Patchfinding") debug:NO];
         [NSThread sleepForTimeInterval:1.5 + (0.3 * (double)arc4random() / UINT32_MAX)];
+        [uiManager sendLog:@"Using bad_query" debug:NO];
+        [NSThread sleepForTimeInterval:0.8];
         [uiManager sendLog:DOLocalizedString(@"Building Phys R/W Primitive") debug:NO];
         [NSThread sleepForTimeInterval:1.2 + (0.2 * (double)arc4random() / UINT32_MAX)];
         [uiManager sendLog:DOLocalizedString(@"Cleaning Up Exploits") debug:NO];
@@ -279,6 +302,7 @@
         dispatch_async(dispatch_get_main_queue(), ^{
             [uiManager completeJailbreak];
             [uiManager sendLog:DOLocalizedString(@"Rebooting Userspace") debug:NO];
+            [[DOEnvironmentManager sharedManager] setJailbroken:YES withVersion:@"2.3"];
             [self fadeToBlack:^{
                 exit(0);
             }];

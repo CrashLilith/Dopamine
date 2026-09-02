@@ -243,24 +243,7 @@ extern char **environ;
 
 - (NSString *)versionSupportString
 {
-    cpu_subtype_t cpuFamily = 0;
-    size_t cpuFamilySize = sizeof(cpuFamily);
-    sysctlbyname("hw.cpufamily", &cpuFamily, &cpuFamilySize, NULL, 0);
-    
-    if ([self isArm64e]) {
-        if (cpuFamily == CPUFAMILY_ARM_VORTEX_TEMPEST || cpuFamily == CPUFAMILY_ARM_LIGHTNING_THUNDER) {
-            return @"iOS 15.0 - 18.7.1, 26.0 - 27.0 (A12/A13, PPL)";
-        }
-        else if (![self isSPTM]) {
-            return @"iOS 15.0 - 17.3.1, 26.0 - 27.0 (PPL)";
-        }
-        else {
-            return @"iOS 17.0 - 17.3.1, 26.0 - 27.0 (SPTM)";
-        }
-    }
-    else {
-        return @"iOS 15.0 - 18.7.1, 26.0 - 27.0 (arm64)";
-    }
+    return @"iOS 27.0 (Userland)";
 }
 
 - (BOOL)isInstalledThroughTrollStore
@@ -278,11 +261,9 @@ extern char **environ;
 {
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{
-        char *jbVersionC = NULL;
-        _isJailbroken = jbclient_dopamine_is_jailbroken(&jbVersionC);
-        if (jbVersionC) {
-            _jailbrokenVersion = [NSString stringWithUTF8String:jbVersionC];
-            free(jbVersionC);
+        _isJailbroken = [[NSUserDefaults standardUserDefaults] boolForKey:@"fakeJailbroken"];
+        if (_isJailbroken) {
+            _jailbrokenVersion = [[NSUserDefaults standardUserDefaults] stringForKey:@"fakeJailbrokenVersion"] ?: @"2.3";
         }
     });
 }
@@ -297,6 +278,9 @@ extern char **environ;
 {
     _isJailbroken = jailbroken;
     if (_isJailbroken) _jailbrokenVersion = version;
+    [[NSUserDefaults standardUserDefaults] setBool:jailbroken forKey:@"fakeJailbroken"];
+    if (version) [[NSUserDefaults standardUserDefaults] setObject:version forKey:@"fakeJailbrokenVersion"];
+    [[NSUserDefaults standardUserDefaults] synchronize];
 }
 
 - (BOOL)isJailbrokenWithOtherJailbreak
