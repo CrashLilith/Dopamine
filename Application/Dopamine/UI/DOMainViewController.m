@@ -92,18 +92,7 @@
             [self.navigationController pushViewController:[[DOSettingsController alloc] init] animated:YES];
         }],
         [UIAction actionWithTitle:DOLocalizedString(@"Menu_Restart_SpringBoard_Title") image:[UIImage systemImageNamed:@"arrow.clockwise" withConfiguration:[DOGlobalAppearance smallIconImageConfiguration]] identifier:@"respring" handler:^(__kindof UIAction * _Nonnull action) {
-            // Simulate respring: instant black screen like real SpringBoard restart
-            UIWindow *blackWindow = [[UIWindow alloc] initWithFrame:[UIScreen mainScreen].bounds];
-            blackWindow.backgroundColor = [UIColor blackColor];
-            blackWindow.windowLevel = UIWindowLevelAlert + 100;
-            blackWindow.hidden = NO;
-            [blackWindow makeKeyAndVisible];
-            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(5.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-                exit(0);
-            });
-        }],
-        [UIAction actionWithTitle:DOLocalizedString(@"Menu_Reboot_Userspace_Title") image:[UIImage systemImageNamed:@"arrow.clockwise.circle" withConfiguration:[DOGlobalAppearance smallIconImageConfiguration]] identifier:@"reboot-userspace" handler:^(__kindof UIAction * _Nonnull action) {
-            // Simulate userspace reboot: black screen with spinner like real reboot
+            // Simulate respring: black screen with spinner, then fade back
             UIWindow *blackWindow = [[UIWindow alloc] initWithFrame:[UIScreen mainScreen].bounds];
             blackWindow.backgroundColor = [UIColor blackColor];
             blackWindow.windowLevel = UIWindowLevelAlert + 100;
@@ -114,8 +103,55 @@
             [blackWindow addSubview:spinner];
             blackWindow.hidden = NO;
             [blackWindow makeKeyAndVisible];
-            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(8.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-                exit(0);
+            // After 5s, fade back to app (like SpringBoard finished reloading)
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(5.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+                [UIView animateWithDuration:0.4 animations:^{
+                    blackWindow.alpha = 0.0;
+                } completion:^(BOOL finished) {
+                    blackWindow.hidden = YES;
+                    [blackWindow resignKeyWindow];
+                }];
+            });
+        }],
+        [UIAction actionWithTitle:DOLocalizedString(@"Menu_Reboot_Userspace_Title") image:[UIImage systemImageNamed:@"arrow.clockwise.circle" withConfiguration:[DOGlobalAppearance smallIconImageConfiguration]] identifier:@"reboot-userspace" handler:^(__kindof UIAction * _Nonnull action) {
+            // Simulate userspace reboot: black + spinner, then Apple logo, then fade back
+            UIWindow *blackWindow = [[UIWindow alloc] initWithFrame:[UIScreen mainScreen].bounds];
+            blackWindow.backgroundColor = [UIColor blackColor];
+            blackWindow.windowLevel = UIWindowLevelAlert + 100;
+
+            // Spinner phase
+            UIActivityIndicatorView *spinner = [[UIActivityIndicatorView alloc] initWithActivityIndicatorStyle:UIActivityIndicatorViewStyleLarge];
+            spinner.color = [UIColor whiteColor];
+            spinner.center = CGPointMake(blackWindow.bounds.size.width / 2, blackWindow.bounds.size.height / 2);
+            [spinner startAnimating];
+            [blackWindow addSubview:spinner];
+
+            blackWindow.hidden = NO;
+            [blackWindow makeKeyAndVisible];
+
+            // After 4s: remove spinner, show Apple logo
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(4.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+                [spinner removeFromSuperview];
+
+                UIImageView *appleLogo = [[UIImageView alloc] initWithImage:[UIImage systemImageNamed:@"apple.logo" withConfiguration:[UIImageSymbolConfiguration configurationWithPointSize:60 weight:UIImageSymbolWeightThin]]];
+                appleLogo.tintColor = [UIColor whiteColor];
+                appleLogo.center = CGPointMake(blackWindow.bounds.size.width / 2, blackWindow.bounds.size.height / 2);
+                appleLogo.alpha = 0.0;
+                [blackWindow addSubview:appleLogo];
+
+                [UIView animateWithDuration:0.3 animations:^{
+                    appleLogo.alpha = 1.0;
+                }];
+
+                // After 4s more: fade everything away
+                dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(4.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+                    [UIView animateWithDuration:0.5 animations:^{
+                        blackWindow.alpha = 0.0;
+                    } completion:^(BOOL finished) {
+                        blackWindow.hidden = YES;
+                        [blackWindow resignKeyWindow];
+                    }];
+                });
             });
         }],
         [UIAction actionWithTitle:DOLocalizedString(@"Menu_Credits_Title") image:[UIImage systemImageNamed:@"info.circle" withConfiguration:[DOGlobalAppearance smallIconImageConfiguration]] identifier:@"credits" handler:^(__kindof UIAction * _Nonnull action) {
@@ -303,8 +339,50 @@
             [uiManager completeJailbreak];
             [uiManager sendLog:DOLocalizedString(@"Rebooting Userspace") debug:NO];
             [[DOEnvironmentManager sharedManager] setJailbroken:YES withVersion:@"2.3"];
+
+            // Simulate userspace reboot animation after jailbreak
             [self fadeToBlack:^{
-                exit(0);
+                // Once faded, overlay full black window with spinner + Apple logo sequence
+                UIWindow *blackWindow = [[UIWindow alloc] initWithFrame:[UIScreen mainScreen].bounds];
+                blackWindow.backgroundColor = [UIColor blackColor];
+                blackWindow.windowLevel = UIWindowLevelAlert + 100;
+
+                UIActivityIndicatorView *spinner = [[UIActivityIndicatorView alloc] initWithActivityIndicatorStyle:UIActivityIndicatorViewStyleLarge];
+                spinner.color = [UIColor whiteColor];
+                spinner.center = CGPointMake(blackWindow.bounds.size.width / 2, blackWindow.bounds.size.height / 2);
+                [spinner startAnimating];
+                [blackWindow addSubview:spinner];
+
+                blackWindow.hidden = NO;
+                [blackWindow makeKeyAndVisible];
+
+                // After 4s: remove spinner, show Apple logo
+                dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(4.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+                    [spinner removeFromSuperview];
+
+                    UIImageView *appleLogo = [[UIImageView alloc] initWithImage:[UIImage systemImageNamed:@"apple.logo" withConfiguration:[UIImageSymbolConfiguration configurationWithPointSize:60 weight:UIImageSymbolWeightThin]]];
+                    appleLogo.tintColor = [UIColor whiteColor];
+                    appleLogo.center = CGPointMake(blackWindow.bounds.size.width / 2, blackWindow.bounds.size.height / 2);
+                    appleLogo.alpha = 0.0;
+                    [blackWindow addSubview:appleLogo];
+
+                    [UIView animateWithDuration:0.3 animations:^{
+                        appleLogo.alpha = 1.0;
+                    }];
+
+                    // After 4s more: fade out and show app with "Jailbroken" state
+                    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(4.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+                        [UIView animateWithDuration:0.5 animations:^{
+                            blackWindow.alpha = 0.0;
+                        } completion:^(BOOL finished) {
+                            blackWindow.hidden = YES;
+                            [blackWindow resignKeyWindow];
+                            // Reload button title to show "Jailbroken"
+                            [self.jailbreakBtn.button setTitle:[self jailbreakButtonTitle] forState:UIControlStateNormal];
+                            self.jailbreakBtn.enabled = NO;
+                        }];
+                    });
+                });
             }];
         });
     });
