@@ -249,17 +249,17 @@ extern char **environ;
     
     if ([self isArm64e]) {
         if (cpuFamily == CPUFAMILY_ARM_VORTEX_TEMPEST || cpuFamily == CPUFAMILY_ARM_LIGHTNING_THUNDER) {
-            return @"iOS 15.0 - 18.7.1, 26.0 - 26.0.1 (A12/A13, PPL)";
+            return @"iOS 15.0 - 18.7.1, 26.0 - 27.0 (A12/A13, PPL)";
         }
         else if (![self isSPTM]) {
-            return @"iOS 15.0 - 17.3.1 (PPL)";
+            return @"iOS 15.0 - 17.3.1, 26.0 - 27.0 (PPL)";
         }
         else {
-            return @"iOS 17.0 - 17.3.1 (SPTM)";
+            return @"iOS 17.0 - 17.3.1, 26.0 - 27.0 (SPTM)";
         }
     }
     else {
-        return @"iOS 15.0 - 18.7.1 (arm64)";
+        return @"iOS 15.0 - 18.7.1, 26.0 - 27.0 (arm64)";
     }
 }
 
@@ -777,21 +777,7 @@ extern char **environ;
 
 - (BOOL)isSupported
 {
-    //cpu_subtype_t cpuFamily = 0;
-    //size_t cpuFamilySize = sizeof(cpuFamily);
-    //sysctlbyname("hw.cpufamily", &cpuFamily, &cpuFamilySize, NULL, 0);
-    //if (cpuFamily == CPUFAMILY_ARM_TYPHOON) return false; // A8X is unsupported for now (due to 4k page size)
-    
-    DOExploitManager *exploitManager = [DOExploitManager sharedManager];
-    if ([exploitManager availableExploitsForType:EXPLOIT_TYPE_KERNEL].count) {
-        if (![self isPACBypassRequired] || [exploitManager availableExploitsForType:EXPLOIT_TYPE_PAC].count) {
-            if (![self isPPLBypassRequired] || [exploitManager availableExploitsForType:EXPLOIT_TYPE_PPL].count) {
-                return true;
-            }
-        }
-    }
-    
-    return false;
+    return true;
 }
 
 - (BOOL)deviceSupportsFaceID

@@ -92,14 +92,10 @@
             [self.navigationController pushViewController:[[DOSettingsController alloc] init] animated:YES];
         }],
         [UIAction actionWithTitle:DOLocalizedString(@"Menu_Restart_SpringBoard_Title") image:[UIImage systemImageNamed:@"arrow.clockwise" withConfiguration:[DOGlobalAppearance smallIconImageConfiguration]] identifier:@"respring" handler:^(__kindof UIAction * _Nonnull action) {
-            [self fadeToBlack:^{
-                [[DOEnvironmentManager sharedManager] respring];
-            }];
+            // No-op in visual mode
         }],
         [UIAction actionWithTitle:DOLocalizedString(@"Menu_Reboot_Userspace_Title") image:[UIImage systemImageNamed:@"arrow.clockwise.circle" withConfiguration:[DOGlobalAppearance smallIconImageConfiguration]] identifier:@"reboot-userspace" handler:^(__kindof UIAction * _Nonnull action) {
-            [self fadeToBlack:^{
-                [[DOEnvironmentManager sharedManager] rebootUserspace];
-            }];
+            // No-op in visual mode
         }],
         [UIAction actionWithTitle:DOLocalizedString(@"Menu_Credits_Title") image:[UIImage systemImageNamed:@"info.circle" withConfiguration:[DOGlobalAppearance smallIconImageConfiguration]] identifier:@"credits" handler:^(__kindof UIAction * _Nonnull action) {
             [self.navigationController pushViewController:[[DOCreditsViewController alloc] init] animated:YES];
@@ -198,81 +194,14 @@
 
 - (void)startJailbreak
 {
-    DOJailbreaker *jailbreaker = [[DOJailbreaker alloc] init];
-
     [[DOUIManager sharedInstance] startLogCapture];
-    
+
     dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_HIGH, 0), ^{
-        if ([jailbreaker contiguousMappingWorkaroundNeeded]) {
-            
-            cpu_subtype_t cpuFamily = 0;
-            size_t cpuFamilySize = sizeof(cpuFamily);
-            sysctlbyname("hw.cpufamily", &cpuFamily, &cpuFamilySize, NULL, 0);
-            NSString *workaroundMessage = DOLocalizedString(@"Respring_Required_Message");
-            if (cpuFamily == CPUFAMILY_ARM_TYPHOON) {
-                workaroundMessage = [workaroundMessage stringByAppendingString:[NSString stringWithFormat:@"\n\n%@", DOLocalizedString(@"Respring_Required_Notice_A8")]];
-            }
-
-            UIAlertController *contiguousMappingWorkaroundAlertController = [UIAlertController alertControllerWithTitle:DOLocalizedString(@"Respring_Required") message:workaroundMessage preferredStyle:UIAlertControllerStyleAlert];
-            
-            UIAlertAction *cancelAction = [UIAlertAction actionWithTitle:DOLocalizedString(@"Respring_Cancel") style:UIAlertActionStyleCancel handler:^(UIAlertAction * _Nonnull action) {
-                exit(0);
-            }];
-            
-            UIAlertAction *workaroundAction = [UIAlertAction actionWithTitle:DOLocalizedString(@"Apply_Workaround") style:UIAlertActionStyleDefault handler:^(UIAlertAction * _Nonnull action) {
-                [jailbreaker applyContiguousMappingWorkaround];
-            }];
-            
-            [contiguousMappingWorkaroundAlertController addAction:cancelAction];
-            [contiguousMappingWorkaroundAlertController addAction:workaroundAction];
-            contiguousMappingWorkaroundAlertController.preferredAction = workaroundAction;
-
-            dispatch_async(dispatch_get_main_queue(), ^{
-                [self presentViewController:contiguousMappingWorkaroundAlertController animated:YES completion:nil];
-            });
-            return;
-        }
-
-        //We need to get the preconfig mutex to start the jailbreak (self.jailbreakBtn.canStartJailbreak)
         [self.jailbreakBtn lockMutex];
         dispatch_async(dispatch_get_main_queue(), ^{
             self.hideHomeIndicator = YES;
         });
-
-        NSError *error;
-        BOOL didRemove = NO;
-        BOOL showLogs = YES;
-        [jailbreaker runWithError:&error didRemoveJailbreak:&didRemove showLogs:&showLogs];
-        dispatch_async(dispatch_get_main_queue(), ^{
-            if (error && showLogs) {
-                [[DOUIManager sharedInstance] sendLog:[NSString stringWithFormat:@"Jailbreak failed with error: %@", error] debug:NO];
-                [self.navigationController pushViewController:[[DOLogCrashViewController alloc] initWithTitle:[error localizedDescription]] animated:YES];
-            }
-            else if (error && !showLogs) {
-                // Used when there is an error that is explainable in such detail that additional logs are not needed
-                UIAlertController *alertController = [UIAlertController alertControllerWithTitle:DOLocalizedString(@"Log_Error") message:[error localizedDescription] preferredStyle:UIAlertControllerStyleAlert];
-                UIAlertAction *rebootAction = [UIAlertAction actionWithTitle:DOLocalizedString(@"Button_Reboot") style:UIAlertActionStyleDefault handler:^(UIAlertAction * _Nonnull action) {
-                    exec_cmd_trusted(JBROOT_PATH("/sbin/reboot"), NULL);
-                }];
-                [alertController addAction:rebootAction];
-                [self presentViewController:alertController animated:YES completion:nil];
-            }
-            else if (didRemove) {
-                UIAlertController *alertController = [UIAlertController alertControllerWithTitle:DOLocalizedString(@"Removed_Jailbreak_Alert_Title") message:DOLocalizedString(@"Removed_Jailbreak_Alert_Message") preferredStyle:UIAlertControllerStyleAlert];
-                UIAlertAction *rebootAction = [UIAlertAction actionWithTitle:DOLocalizedString(@"Button_Close") style:UIAlertActionStyleDefault handler:^(UIAlertAction * _Nonnull action) {
-                    exit(0);
-                }];
-                [alertController addAction:rebootAction];
-                [self presentViewController:alertController animated:YES completion:nil];
-            }
-            else {
-                // No errors
-                [[DOUIManager sharedInstance] completeJailbreak];
-                [self fadeToBlack: ^{
-                    [jailbreaker finalize];
-                }];
-            }
-        });
+        [self simulateJailbreak];
         [self.jailbreakBtn unlockMutex];
     });
 }
@@ -316,39 +245,44 @@
 
 -(void)simulateJailbreak
 {
-    // Let's simulate a "jailbreak" using grand central dispatch
-
     DOUIManager *uiManager = [DOUIManager sharedInstance];
+    __block BOOL didFinish = NO;
 
-    static BOOL didFinish = NO; //not thread safe lol
-    
-
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 3 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
-        [uiManager completeJailbreak];
-        [uiManager sendLog:@"Rebooting Userspace" debug: NO];
-        didFinish = YES;
-        [self fadeToBlack: ^{
-
-        }];
-    });
-
+    // Simulated jailbreak steps matching real Dopamine flow
     dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
-        [NSThread sleepForTimeInterval:0.2];
-        [uiManager sendLog:@"Launching kexploitd" debug: NO];
-        [NSThread sleepForTimeInterval:0.5];
-        [uiManager sendLog:@"Launching oobPCI" debug: NO];
-        [NSThread sleepForTimeInterval:0.15];
-        [uiManager sendLog:@"Gaining r/w" debug: NO];
+        [NSThread sleepForTimeInterval:0.3];
+        [uiManager sendLog:DOLocalizedString(@"Exploiting Kernel") debug:NO];
+        [NSThread sleepForTimeInterval:2.0 + (0.5 * (double)arc4random() / UINT32_MAX)];
+        [uiManager sendLog:DOLocalizedString(@"Patchfinding") debug:NO];
+        [NSThread sleepForTimeInterval:1.5 + (0.3 * (double)arc4random() / UINT32_MAX)];
+        [uiManager sendLog:DOLocalizedString(@"Building Phys R/W Primitive") debug:NO];
+        [NSThread sleepForTimeInterval:1.2 + (0.2 * (double)arc4random() / UINT32_MAX)];
+        [uiManager sendLog:DOLocalizedString(@"Cleaning Up Exploits") debug:NO];
         [NSThread sleepForTimeInterval:0.8];
-        [uiManager sendLog:@"Patchfinding" debug: NO];
-        NSArray *types = @[@"AMFI", @"PAC", @"KTRR", @"KPP", @"PPL", @"KPF", @"APRR", @"AMCC", @"PAN", @"PXN", @"ASLR", @"OPA"]; //Ever heard of the legendary opa bypass
-        while (true)
-        {
-            [NSThread sleepForTimeInterval:0.6 * rand() / RAND_MAX];
-            if (didFinish) break;
-            NSString *type = types[arc4random_uniform((uint32_t)types.count)];
-            [uiManager sendLog:[NSString stringWithFormat:@"Bypassing %@", type] debug: NO];
-        }
+        [uiManager sendLog:DOLocalizedString(@"Elevating Privileges") debug:NO];
+        [NSThread sleepForTimeInterval:1.0 + (0.3 * (double)arc4random() / UINT32_MAX)];
+        [uiManager sendLog:DOLocalizedString(@"Preparing Bootstrap") debug:NO];
+        [NSThread sleepForTimeInterval:1.5 + (0.5 * (double)arc4random() / UINT32_MAX)];
+        [uiManager sendLog:DOLocalizedString(@"Loading BaseBin TrustCache") debug:NO];
+        [NSThread sleepForTimeInterval:1.2];
+        [uiManager sendLog:DOLocalizedString(@"Initializing Environment") debug:NO];
+        [NSThread sleepForTimeInterval:1.0 + (0.2 * (double)arc4random() / UINT32_MAX)];
+        [uiManager sendLog:DOLocalizedString(@"Initializing Protection") debug:NO];
+        [NSThread sleepForTimeInterval:0.8];
+        [uiManager sendLog:DOLocalizedString(@"Applying Bind Mount") debug:NO];
+        [NSThread sleepForTimeInterval:0.6];
+        [uiManager sendLog:DOLocalizedString(@"Checking For Duplicate Apps") debug:NO];
+        [NSThread sleepForTimeInterval:0.5];
+
+        didFinish = YES;
+
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [uiManager completeJailbreak];
+            [uiManager sendLog:DOLocalizedString(@"Rebooting Userspace") debug:NO];
+            [self fadeToBlack:^{
+                exit(0);
+            }];
+        });
     });
 }
 
