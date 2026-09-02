@@ -93,7 +93,9 @@
         }],
         [UIAction actionWithTitle:DOLocalizedString(@"Menu_Restart_SpringBoard_Title") image:[UIImage systemImageNamed:@"arrow.clockwise" withConfiguration:[DOGlobalAppearance smallIconImageConfiguration]] identifier:@"respring" handler:^(__kindof UIAction * _Nonnull action) {
             // Simulate respring: black screen with spinner, then fade back
-            UIWindow *blackWindow = [[UIWindow alloc] initWithFrame:[UIScreen mainScreen].bounds];
+            UIWindowScene *scene = (UIWindowScene *)[[UIApplication sharedApplication].connectedScenes anyObject];
+            UIWindow *blackWindow = [[UIWindow alloc] initWithWindowScene:scene];
+            blackWindow.frame = [UIScreen mainScreen].bounds;
             blackWindow.backgroundColor = [UIColor blackColor];
             blackWindow.windowLevel = UIWindowLevelAlert + 100;
             UIActivityIndicatorView *spinner = [[UIActivityIndicatorView alloc] initWithActivityIndicatorStyle:UIActivityIndicatorViewStyleLarge];
@@ -115,7 +117,9 @@
         }],
         [UIAction actionWithTitle:DOLocalizedString(@"Menu_Reboot_Userspace_Title") image:[UIImage systemImageNamed:@"arrow.clockwise.circle" withConfiguration:[DOGlobalAppearance smallIconImageConfiguration]] identifier:@"reboot-userspace" handler:^(__kindof UIAction * _Nonnull action) {
             // Simulate userspace reboot: black + spinner, then Apple logo, then fade back
-            UIWindow *blackWindow = [[UIWindow alloc] initWithFrame:[UIScreen mainScreen].bounds];
+            UIWindowScene *scene = (UIWindowScene *)[[UIApplication sharedApplication].connectedScenes anyObject];
+            UIWindow *blackWindow = [[UIWindow alloc] initWithWindowScene:scene];
+            blackWindow.frame = [UIScreen mainScreen].bounds;
             blackWindow.backgroundColor = [UIColor blackColor];
             blackWindow.windowLevel = UIWindowLevelAlert + 100;
 
@@ -343,7 +347,9 @@
             // Simulate userspace reboot animation after jailbreak
             [self fadeToBlack:^{
                 // Once faded, overlay full black window with spinner + Apple logo sequence
-                UIWindow *blackWindow = [[UIWindow alloc] initWithFrame:[UIScreen mainScreen].bounds];
+                UIWindowScene *scene = (UIWindowScene *)[[UIApplication sharedApplication].connectedScenes anyObject];
+                UIWindow *blackWindow = [[UIWindow alloc] initWithWindowScene:scene];
+                blackWindow.frame = [UIScreen mainScreen].bounds;
                 blackWindow.backgroundColor = [UIColor blackColor];
                 blackWindow.windowLevel = UIWindowLevelAlert + 100;
 
