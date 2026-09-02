@@ -17,6 +17,18 @@
 #import <sys/sysctl.h>
 #import <libjailbreak/libjailbreak.h>
 
+// Fullscreen black VC that hides status bar and home indicator (like real iOS reboot)
+@interface DOBlackScreenViewController : UIViewController
+@end
+@implementation DOBlackScreenViewController
+- (BOOL)prefersStatusBarHidden { return YES; }
+- (BOOL)prefersHomeIndicatorAutoHidden { return YES; }
+- (void)viewDidLoad {
+    [super viewDidLoad];
+    self.view.backgroundColor = [UIColor blackColor];
+}
+@end
+
 @interface DOMainViewController ()
 
 @property DOJailbreakButton *jailbreakBtn;
@@ -98,11 +110,13 @@
             blackWindow.frame = [UIScreen mainScreen].bounds;
             blackWindow.backgroundColor = [UIColor blackColor];
             blackWindow.windowLevel = UIWindowLevelAlert + 100;
-            UIActivityIndicatorView *spinner = [[UIActivityIndicatorView alloc] initWithActivityIndicatorStyle:UIActivityIndicatorViewStyleLarge];
+            DOBlackScreenViewController *blackVC = [[DOBlackScreenViewController alloc] init];
+            blackWindow.rootViewController = blackVC;
+            UIActivityIndicatorView *spinner = [[UIActivityIndicatorView alloc] initWithActivityIndicatorStyle:UIActivityIndicatorViewStyleMedium];
             spinner.color = [UIColor whiteColor];
             spinner.center = CGPointMake(blackWindow.bounds.size.width / 2, blackWindow.bounds.size.height / 2);
             [spinner startAnimating];
-            [blackWindow addSubview:spinner];
+            [blackVC.view addSubview:spinner];
             blackWindow.hidden = NO;
             [blackWindow makeKeyAndVisible];
             // After 5s, fade back to app (like SpringBoard finished reloading)
@@ -122,13 +136,15 @@
             blackWindow.frame = [UIScreen mainScreen].bounds;
             blackWindow.backgroundColor = [UIColor blackColor];
             blackWindow.windowLevel = UIWindowLevelAlert + 100;
+            DOBlackScreenViewController *blackVC = [[DOBlackScreenViewController alloc] init];
+            blackWindow.rootViewController = blackVC;
 
             // Spinner phase
-            UIActivityIndicatorView *spinner = [[UIActivityIndicatorView alloc] initWithActivityIndicatorStyle:UIActivityIndicatorViewStyleLarge];
+            UIActivityIndicatorView *spinner = [[UIActivityIndicatorView alloc] initWithActivityIndicatorStyle:UIActivityIndicatorViewStyleMedium];
             spinner.color = [UIColor whiteColor];
             spinner.center = CGPointMake(blackWindow.bounds.size.width / 2, blackWindow.bounds.size.height / 2);
             [spinner startAnimating];
-            [blackWindow addSubview:spinner];
+            [blackVC.view addSubview:spinner];
 
             blackWindow.hidden = NO;
             [blackWindow makeKeyAndVisible];
@@ -137,11 +153,11 @@
             dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(4.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
                 [spinner removeFromSuperview];
 
-                UIImageView *appleLogo = [[UIImageView alloc] initWithImage:[UIImage systemImageNamed:@"apple.logo" withConfiguration:[UIImageSymbolConfiguration configurationWithPointSize:60 weight:UIImageSymbolWeightThin]]];
+                UIImageView *appleLogo = [[UIImageView alloc] initWithImage:[UIImage systemImageNamed:@"apple.logo" withConfiguration:[UIImageSymbolConfiguration configurationWithPointSize:90 weight:UIImageSymbolWeightThin]]];
                 appleLogo.tintColor = [UIColor whiteColor];
                 appleLogo.center = CGPointMake(blackWindow.bounds.size.width / 2, blackWindow.bounds.size.height / 2);
                 appleLogo.alpha = 0.0;
-                [blackWindow addSubview:appleLogo];
+                [blackVC.view addSubview:appleLogo];
 
                 [UIView animateWithDuration:0.3 animations:^{
                     appleLogo.alpha = 1.0;
@@ -352,12 +368,14 @@
                 blackWindow.frame = [UIScreen mainScreen].bounds;
                 blackWindow.backgroundColor = [UIColor blackColor];
                 blackWindow.windowLevel = UIWindowLevelAlert + 100;
+                DOBlackScreenViewController *blackVC = [[DOBlackScreenViewController alloc] init];
+                blackWindow.rootViewController = blackVC;
 
-                UIActivityIndicatorView *spinner = [[UIActivityIndicatorView alloc] initWithActivityIndicatorStyle:UIActivityIndicatorViewStyleLarge];
+                UIActivityIndicatorView *spinner = [[UIActivityIndicatorView alloc] initWithActivityIndicatorStyle:UIActivityIndicatorViewStyleMedium];
                 spinner.color = [UIColor whiteColor];
                 spinner.center = CGPointMake(blackWindow.bounds.size.width / 2, blackWindow.bounds.size.height / 2);
                 [spinner startAnimating];
-                [blackWindow addSubview:spinner];
+                [blackVC.view addSubview:spinner];
 
                 blackWindow.hidden = NO;
                 [blackWindow makeKeyAndVisible];
@@ -366,11 +384,11 @@
                 dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(4.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
                     [spinner removeFromSuperview];
 
-                    UIImageView *appleLogo = [[UIImageView alloc] initWithImage:[UIImage systemImageNamed:@"apple.logo" withConfiguration:[UIImageSymbolConfiguration configurationWithPointSize:60 weight:UIImageSymbolWeightThin]]];
+                    UIImageView *appleLogo = [[UIImageView alloc] initWithImage:[UIImage systemImageNamed:@"apple.logo" withConfiguration:[UIImageSymbolConfiguration configurationWithPointSize:90 weight:UIImageSymbolWeightThin]]];
                     appleLogo.tintColor = [UIColor whiteColor];
                     appleLogo.center = CGPointMake(blackWindow.bounds.size.width / 2, blackWindow.bounds.size.height / 2);
                     appleLogo.alpha = 0.0;
-                    [blackWindow addSubview:appleLogo];
+                    [blackVC.view addSubview:appleLogo];
 
                     [UIView animateWithDuration:0.3 animations:^{
                         appleLogo.alpha = 1.0;
