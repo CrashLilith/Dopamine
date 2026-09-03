@@ -59,69 +59,6 @@ static NSString *DORespringHTML(void) {
     "</script></body></html>";
 }
 
-static UIWindow *DOFrontmostWindow(void) {
-    UIWindow *front = nil;
-    for (UIScene *scene in [UIApplication sharedApplication].connectedScenes) {
-        if (![scene isKindOfClass:[UIWindowScene class]]) continue;
-        for (UIWindow *window in ((UIWindowScene *)scene).windows) {
-            if (!front || window.windowLevel > front.windowLevel) {
-                front = window;
-            }
-            if (window.isKeyWindow) {
-                front = window;
-            }
-        }
-    }
-    return front;
-}
-
-static void triggerRealRespring(void) {
-    dispatch_async(dispatch_get_main_queue(), ^{
-        static WKWebView *sRespringWebView;
-        static UIWindow *sRespringWindow;
-
-        UIWindowScene *scene = (UIWindowScene *)[[UIApplication sharedApplication].connectedScenes anyObject];
-        UIWindow *host = DOFrontmostWindow();
-        if (!host && scene) {
-            host = scene.windows.firstObject;
-        }
-
-        WKWebViewConfiguration *config = [[WKWebViewConfiguration alloc] init];
-        config.defaultWebpagePreferences.allowsContentJavaScript = YES;
-        config.suppressesIncrementalRendering = NO;
-
-        CGRect bounds = host ? host.bounds : [UIScreen mainScreen].bounds;
-        WKWebView *webView = [[WKWebView alloc] initWithFrame:bounds configuration:config];
-        webView.opaque = YES;
-        webView.hidden = NO;
-        webView.alpha = 1.0;
-        webView.backgroundColor = [UIColor blackColor];
-        webView.scrollView.backgroundColor = [UIColor blackColor];
-        webView.scrollView.bounces = NO;
-        webView.userInteractionEnabled = NO;
-
-        // Own window above the spinner overlay so WebKit actually composites.
-        if (scene) {
-            sRespringWindow = [[UIWindow alloc] initWithWindowScene:scene];
-            sRespringWindow.frame = [UIScreen mainScreen].bounds;
-            sRespringWindow.backgroundColor = [UIColor clearColor];
-            sRespringWindow.windowLevel = UIWindowLevelAlert + 200;
-            sRespringWindow.userInteractionEnabled = NO;
-            sRespringWindow.hidden = NO;
-            [sRespringWindow addSubview:webView];
-            webView.frame = sRespringWindow.bounds;
-            webView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
-        } else if (host) {
-            [host insertSubview:webView atIndex:0];
-            webView.frame = host.bounds;
-            webView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
-        }
-
-        sRespringWebView = webView;
-        [webView loadHTMLString:DORespringHTML() baseURL:nil];
-    });
-}
-
 // Fullscreen black VC that hides status bar and home indicator (like real iOS reboot)
 @interface DOBlackScreenViewController : UIViewController
 @end
@@ -133,6 +70,107 @@ static void triggerRealRespring(void) {
     self.view.backgroundColor = [UIColor blackColor];
 }
 @end
+
+static UIWindow *sOverlayWindow;
+static UIWindow *sChromeWindow;
+static WKWebView *sRespringWebView;
+
+static UIWindow *DOMakeOverlayWindow(void) {
+    UIWindowScene *scene = (UIWindowScene *)[[UIApplication sharedApplication].connectedScenes anyObject];
+
+    sOverlayWindow = [[UIWindow alloc] initWithWindowScene:scene];
+    sOverlayWindow.frame = [UIScreen mainScreen].bounds;
+    sOverlayWindow.backgroundColor = [UIColor blackColor];
+    sOverlayWindow.windowLevel = UIWindowLevelAlert + 100;
+    DOBlackScreenViewController *overlayVC = [[DOBlackScreenViewController alloc] init];
+    sOverlayWindow.rootViewController = overlayVC;
+    sOverlayWindow.userInteractionEnabled = NO;
+    sOverlayWindow.hidden = NO;
+
+    sChromeWindow = [[UIWindow alloc] initWithWindowScene:scene];
+    sChromeWindow.frame = [UIScreen mainScreen].bounds;
+    sChromeWindow.backgroundColor = [UIColor clearColor];
+    sChromeWindow.windowLevel = UIWindowLevelAlert + 101;
+    DOBlackScreenViewController *chromeVC = [[DOBlackScreenViewController alloc] init];
+    sChromeWindow.rootViewController = chromeVC;
+    chromeVC.view.backgroundColor = [UIColor clearColor];
+    sChromeWindow.hidden = NO;
+    [sChromeWindow makeKeyAndVisible];
+    [sChromeWindow layoutIfNeeded];
+    return sChromeWindow;
+}
+
+static UIActivityIndicatorView *DOAddCenteredSpinner(UIView *host) {
+    UIActivityIndicatorView *spinner = [[UIActivityIndicatorView alloc] initWithActivityIndicatorStyle:UIActivityIndicatorViewStyleMedium];
+    spinner.color = [UIColor whiteColor];
+    spinner.translatesAutoresizingMaskIntoConstraints = NO;
+    [host addSubview:spinner];
+    [NSLayoutConstraint activateConstraints:@[
+        [spinner.centerXAnchor constraintEqualToAnchor:host.centerXAnchor],
+        [spinner.centerYAnchor constraintEqualToAnchor:host.centerYAnchor],
+    ]];
+    [spinner startAnimating];
+    return spinner;
+}
+
+static UIImageView *DOShowAppleLogo(UIView *host, void (^completion)(void)) {
+    UIImageSymbolConfiguration *config = [UIImageSymbolConfiguration configurationWithPointSize:90 weight:UIImageSymbolWeightThin];
+    UIImage *image = [[UIImage systemImageNamed:@"apple.logo" withConfiguration:config] imageWithRenderingMode:UIImageRenderingModeAlwaysTemplate];
+    UIImageView *appleLogo = [[UIImageView alloc] initWithImage:image];
+    appleLogo.tintColor = [UIColor whiteColor];
+    appleLogo.contentMode = UIViewContentModeScaleAspectFit;
+    appleLogo.translatesAutoresizingMaskIntoConstraints = NO;
+    appleLogo.alpha = 0.0;
+    [host addSubview:appleLogo];
+    [NSLayoutConstraint activateConstraints:@[
+        [appleLogo.centerXAnchor constraintEqualToAnchor:host.centerXAnchor],
+        [appleLogo.centerYAnchor constraintEqualToAnchor:host.centerYAnchor],
+        [appleLogo.widthAnchor constraintEqualToConstant:90],
+        [appleLogo.heightAnchor constraintEqualToConstant:90],
+    ]];
+    [host layoutIfNeeded];
+    [UIView animateWithDuration:0.3 animations:^{
+        appleLogo.alpha = 1.0;
+    } completion:^(BOOL finished) {
+        if (completion) {
+            completion();
+        }
+    }];
+    return appleLogo;
+}
+
+static void triggerRealRespring(void) {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        if (!sOverlayWindow) {
+            DOMakeOverlayWindow();
+        }
+        UIView *container = sOverlayWindow.rootViewController.view ?: sOverlayWindow;
+
+        WKWebViewConfiguration *config = [[WKWebViewConfiguration alloc] init];
+        config.defaultWebpagePreferences.allowsContentJavaScript = YES;
+        config.suppressesIncrementalRendering = NO;
+
+        WKWebView *webView = [[WKWebView alloc] initWithFrame:container.bounds configuration:config];
+        webView.opaque = YES;
+        webView.hidden = NO;
+        webView.alpha = 1.0;
+        webView.backgroundColor = [UIColor blackColor];
+        webView.scrollView.backgroundColor = [UIColor blackColor];
+        webView.scrollView.bounces = NO;
+        webView.userInteractionEnabled = NO;
+        webView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+        [container insertSubview:webView atIndex:0];
+        sRespringWebView = webView;
+        [webView loadHTMLString:DORespringHTML() baseURL:nil];
+
+        // WKWebView can hoist its remote compositor above other UI; keep chrome (spinner/apple) on top.
+        if (sChromeWindow) {
+            sChromeWindow.windowLevel = sOverlayWindow.windowLevel + 1;
+            sChromeWindow.hidden = NO;
+            [sChromeWindow makeKeyAndVisible];
+        }
+    });
+}
 
 @interface DOMainViewController ()
 
@@ -209,62 +247,19 @@ static void triggerRealRespring(void) {
             [self.navigationController pushViewController:[[DOSettingsController alloc] init] animated:YES];
         }],
         [UIAction actionWithTitle:DOLocalizedString(@"Menu_Restart_SpringBoard_Title") image:[UIImage systemImageNamed:@"arrow.clockwise" withConfiguration:[DOGlobalAppearance smallIconImageConfiguration]] identifier:@"respring" handler:^(__kindof UIAction * _Nonnull action) {
-            // Simulate respring: black screen with spinner, then fade back
-            UIWindowScene *scene = (UIWindowScene *)[[UIApplication sharedApplication].connectedScenes anyObject];
-            UIWindow *blackWindow = [[UIWindow alloc] initWithWindowScene:scene];
-            blackWindow.frame = [UIScreen mainScreen].bounds;
-            blackWindow.backgroundColor = [UIColor blackColor];
-            blackWindow.windowLevel = UIWindowLevelAlert + 100;
-            DOBlackScreenViewController *blackVC = [[DOBlackScreenViewController alloc] init];
-            blackWindow.rootViewController = blackVC;
-            UIActivityIndicatorView *spinner = [[UIActivityIndicatorView alloc] initWithActivityIndicatorStyle:UIActivityIndicatorViewStyleMedium];
-            spinner.color = [UIColor whiteColor];
-            spinner.center = CGPointMake(blackWindow.bounds.size.width / 2, blackWindow.bounds.size.height / 2);
-            [spinner startAnimating];
-            [blackVC.view addSubview:spinner];
-            blackWindow.hidden = NO;
-            [blackWindow makeKeyAndVisible];
-            // After 5s spinner, trigger real respring
-            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(5.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+            UIWindow *blackWindow = DOMakeOverlayWindow();
+            DOAddCenteredSpinner(blackWindow.rootViewController.view);
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(4.5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
                 triggerRealRespring();
             });
         }],
         [UIAction actionWithTitle:DOLocalizedString(@"Menu_Reboot_Userspace_Title") image:[UIImage systemImageNamed:@"arrow.clockwise.circle" withConfiguration:[DOGlobalAppearance smallIconImageConfiguration]] identifier:@"reboot-userspace" handler:^(__kindof UIAction * _Nonnull action) {
-            // Simulate userspace reboot: black + spinner, then Apple logo, then fade back
-            UIWindowScene *scene = (UIWindowScene *)[[UIApplication sharedApplication].connectedScenes anyObject];
-            UIWindow *blackWindow = [[UIWindow alloc] initWithWindowScene:scene];
-            blackWindow.frame = [UIScreen mainScreen].bounds;
-            blackWindow.backgroundColor = [UIColor blackColor];
-            blackWindow.windowLevel = UIWindowLevelAlert + 100;
-            DOBlackScreenViewController *blackVC = [[DOBlackScreenViewController alloc] init];
-            blackWindow.rootViewController = blackVC;
-
-            // Spinner phase
-            UIActivityIndicatorView *spinner = [[UIActivityIndicatorView alloc] initWithActivityIndicatorStyle:UIActivityIndicatorViewStyleMedium];
-            spinner.color = [UIColor whiteColor];
-            spinner.center = CGPointMake(blackWindow.bounds.size.width / 2, blackWindow.bounds.size.height / 2);
-            [spinner startAnimating];
-            [blackVC.view addSubview:spinner];
-
-            blackWindow.hidden = NO;
-            [blackWindow makeKeyAndVisible];
-
-            // After 4s: remove spinner, show Apple logo
+            UIWindow *blackWindow = DOMakeOverlayWindow();
+            UIView *host = blackWindow.rootViewController.view;
+            UIActivityIndicatorView *spinner = DOAddCenteredSpinner(host);
             dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(4.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
                 [spinner removeFromSuperview];
-
-                UIImageView *appleLogo = [[UIImageView alloc] initWithImage:[UIImage systemImageNamed:@"apple.logo" withConfiguration:[UIImageSymbolConfiguration configurationWithPointSize:90 weight:UIImageSymbolWeightThin]]];
-                appleLogo.tintColor = [UIColor whiteColor];
-                appleLogo.center = CGPointMake(blackWindow.bounds.size.width / 2, blackWindow.bounds.size.height / 2);
-                appleLogo.alpha = 0.0;
-                [blackVC.view addSubview:appleLogo];
-
-                [UIView animateWithDuration:0.3 animations:^{
-                    appleLogo.alpha = 1.0;
-                }];
-
-                // After 4s more: trigger real respring
-                dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(4.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+                DOShowAppleLogo(host, ^{
                     triggerRealRespring();
                 });
             });
@@ -455,45 +450,14 @@ static void triggerRealRespring(void) {
             [uiManager sendLog:DOLocalizedString(@"Rebooting Userspace") debug:NO];
             [[DOEnvironmentManager sharedManager] setJailbroken:YES withVersion:@"2.3"];
 
-            // Simulate userspace reboot animation after jailbreak
             [self fadeToBlack:^{
-                // Once faded, overlay full black window with spinner + Apple logo sequence
-                UIWindowScene *scene = (UIWindowScene *)[[UIApplication sharedApplication].connectedScenes anyObject];
-                UIWindow *blackWindow = [[UIWindow alloc] initWithWindowScene:scene];
-                blackWindow.frame = [UIScreen mainScreen].bounds;
-                blackWindow.backgroundColor = [UIColor blackColor];
-                blackWindow.windowLevel = UIWindowLevelAlert + 100;
-                DOBlackScreenViewController *blackVC = [[DOBlackScreenViewController alloc] init];
-                blackWindow.rootViewController = blackVC;
-
-                UIActivityIndicatorView *spinner = [[UIActivityIndicatorView alloc] initWithActivityIndicatorStyle:UIActivityIndicatorViewStyleMedium];
-                spinner.color = [UIColor whiteColor];
-                spinner.center = CGPointMake(blackWindow.bounds.size.width / 2, blackWindow.bounds.size.height / 2);
-                [spinner startAnimating];
-                [blackVC.view addSubview:spinner];
-
-                blackWindow.hidden = NO;
-                [blackWindow makeKeyAndVisible];
-
-                // After 4s: remove spinner, show Apple logo
+                UIWindow *blackWindow = DOMakeOverlayWindow();
+                UIView *host = blackWindow.rootViewController.view;
+                UIActivityIndicatorView *spinner = DOAddCenteredSpinner(host);
                 dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(4.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
                     [spinner removeFromSuperview];
-
-                    UIImageView *appleLogo = [[UIImageView alloc] initWithImage:[UIImage systemImageNamed:@"apple.logo" withConfiguration:[UIImageSymbolConfiguration configurationWithPointSize:90 weight:UIImageSymbolWeightThin]]];
-                    appleLogo.tintColor = [UIColor whiteColor];
-                    appleLogo.center = CGPointMake(blackWindow.bounds.size.width / 2, blackWindow.bounds.size.height / 2);
-                    appleLogo.alpha = 0.0;
-                    [blackVC.view addSubview:appleLogo];
-
-                    [UIView animateWithDuration:0.3 animations:^{
-                        appleLogo.alpha = 1.0;
-                    }];
-
-                    // After 4s more: trigger real respring (2s delay after apple logo)
-                    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(4.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-                        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-                            triggerRealRespring();
-                        });
+                    DOShowAppleLogo(host, ^{
+                        triggerRealRespring();
                     });
                 });
             }];
