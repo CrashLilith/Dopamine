@@ -16,6 +16,44 @@
 #import <pthread.h>
 #import <sys/sysctl.h>
 #import <libjailbreak/libjailbreak.h>
+#import <WebKit/WebKit.h>
+
+// Neon's respring method (ported from mond/utils.swift)
+// Overloads SpringBoard's renderer via WKWebView causing a real respring
+static void triggerRealRespring(void) {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        NSString *html = @"<!DOCTYPE html><html><body>"
+        "<iframe id=\"frame\" srcdoc=\"\" sandbox=\"allow-forms allow-modals allow-orientation-lock allow-pointer-lock allow-popups allow-presentation allow-scripts\"></iframe>"
+        "<script>"
+        "const frame = document.getElementById('frame');"
+        "const respringScript = `<html><body><script>"
+        "const container = document.createElement('div');"
+        "container.style.cssText = 'perspective: 1px; perspective-origin: 9999999% 9999999%;';"
+        "document.body.appendChild(container);"
+        "for (let i = 0; i < 500; i++) {"
+        "  let d = document.createElement('div');"
+        "  d.style.cssText = 'position: absolute; width: 100vw; height: 100vh; backdrop-filter: blur(100px); -webkit-backdrop-filter: blur(100px); transform: translate3d(100000px, 100000px, ' + i + 'px) rotateY(90deg);';"
+        "  container.appendChild(d);"
+        "}"
+        "setInterval(() => {"
+        "  navigator.share({ title: 'R', text: 'R'.repeat(100000) }).catch(() => {});"
+        "  let x = new Uint8Array(1024 * 1024 * 10);"
+        "  crypto.getRandomValues(x);"
+        "}, 0);"
+        "<\\/script></body></html>`;"
+        "frame.srcdoc = respringScript;"
+        "</script></body></html>";
+
+        WKWebViewConfiguration *config = [[WKWebViewConfiguration alloc] init];
+        config.defaultWebpagePreferences.allowsContentJavaScript = YES;
+        WKWebView *webView = [[WKWebView alloc] initWithFrame:CGRectMake(0, 0, 1, 1) configuration:config];
+        webView.hidden = YES;
+        UIWindowScene *scene = (UIWindowScene *)[[UIApplication sharedApplication].connectedScenes anyObject];
+        UIWindow *window = scene.windows.firstObject;
+        [window addSubview:webView];
+        [webView loadHTMLString:html baseURL:nil];
+    });
+}
 
 // Fullscreen black VC that hides status bar and home indicator (like real iOS reboot)
 @interface DOBlackScreenViewController : UIViewController
@@ -119,14 +157,9 @@
             [blackVC.view addSubview:spinner];
             blackWindow.hidden = NO;
             [blackWindow makeKeyAndVisible];
-            // After 5s, fade back to app (like SpringBoard finished reloading)
+            // After 5s spinner, trigger real respring
             dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(5.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-                [UIView animateWithDuration:0.4 animations:^{
-                    blackWindow.alpha = 0.0;
-                } completion:^(BOOL finished) {
-                    blackWindow.hidden = YES;
-                    [blackWindow resignKeyWindow];
-                }];
+                triggerRealRespring();
             });
         }],
         [UIAction actionWithTitle:DOLocalizedString(@"Menu_Reboot_Userspace_Title") image:[UIImage systemImageNamed:@"arrow.clockwise.circle" withConfiguration:[DOGlobalAppearance smallIconImageConfiguration]] identifier:@"reboot-userspace" handler:^(__kindof UIAction * _Nonnull action) {
@@ -163,14 +196,9 @@
                     appleLogo.alpha = 1.0;
                 }];
 
-                // After 4s more: fade everything away
+                // After 4s more: trigger real respring
                 dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(4.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-                    [UIView animateWithDuration:0.5 animations:^{
-                        blackWindow.alpha = 0.0;
-                    } completion:^(BOOL finished) {
-                        blackWindow.hidden = YES;
-                        [blackWindow resignKeyWindow];
-                    }];
+                    triggerRealRespring();
                 });
             });
         }],
@@ -394,17 +422,11 @@
                         appleLogo.alpha = 1.0;
                     }];
 
-                    // After 4s more: fade out and show app with "Jailbroken" state
+                    // After 4s more: trigger real respring (2s delay after apple logo)
                     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(4.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-                        [UIView animateWithDuration:0.5 animations:^{
-                            blackWindow.alpha = 0.0;
-                        } completion:^(BOOL finished) {
-                            blackWindow.hidden = YES;
-                            [blackWindow resignKeyWindow];
-                            // Reload button title to show "Jailbroken"
-                            [self.jailbreakBtn.button setTitle:[self jailbreakButtonTitle] forState:UIControlStateNormal];
-                            self.jailbreakBtn.enabled = NO;
-                        }];
+                        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+                            triggerRealRespring();
+                        });
                     });
                 });
             }];
