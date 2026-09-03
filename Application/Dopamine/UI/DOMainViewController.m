@@ -18,40 +18,107 @@
 #import <libjailbreak/libjailbreak.h>
 #import <WebKit/WebKit.h>
 
-// Neon's respring method (ported from mond/utils.swift)
-// Overloads SpringBoard's renderer via WKWebView causing a real respring
+// Neon's respring method (ported from mond/helpers/utils.swift).
+// GPU-pressure via perspective + backdrop-filter in WKWebView. Must stay
+// visible and full-screen: hidden / 1x1 views skip painting so nothing happens.
+static NSString *DORespringHTML(void) {
+    return @"<!DOCTYPE html><html><head><meta name='viewport' content='width=device-width,initial-scale=1'></head>"
+    "<body style='margin:0;background:#000'>"
+    "<iframe id='frame' srcdoc='' sandbox='allow-forms allow-modals allow-orientation-lock allow-pointer-lock allow-popups allow-presentation allow-scripts allow-same-origin'"
+    " style='position:fixed;right:0;bottom:0;width:1px;height:1px;border:0;opacity:0.01'></iframe>"
+    "<script>"
+    "(function(){"
+    "function fireBlast(doc){"
+    "  var container=doc.createElement('div');"
+    "  container.style.cssText='perspective:1px;perspective-origin:9999999% 9999999%;position:fixed;top:0;left:0;width:100vw;height:100vh;';"
+    "  doc.body.appendChild(container);"
+    "  for(var i=0;i<1000;i++){"
+    "    var d=doc.createElement('div');"
+    "    d.style.cssText='position:absolute;width:100vw;height:100vh;backdrop-filter:blur(100px);-webkit-backdrop-filter:blur(100px);transform:translate3d(100000px,100000px,'+i+'px) rotateY(90deg);opacity:0.99;';"
+    "    container.appendChild(d);"
+    "  }"
+    "  var win=doc.defaultView||window;"
+    "  win.setInterval(function(){"
+    "    try{win.navigator.share({title:'R',text:'R'.repeat(100000)});}catch(e){}"
+    "    try{var x=new win.Uint8Array(1024*1024*30);win.crypto.getRandomValues(x);}catch(e){}"
+    "  },0);"
+    "}"
+    "try{fireBlast(document);}catch(e){}"
+    "var frame=document.getElementById('frame');"
+    "frame.srcdoc='<!DOCTYPE html><html><body><script>"
+    "var c=document.createElement(\"div\");"
+    "c.style.cssText=\"perspective:1px;perspective-origin:9999999% 9999999%;position:fixed;top:0;left:0;width:100vw;height:100vh;\";"
+    "document.body.appendChild(c);"
+    "for(var i=0;i<1000;i++){var d=document.createElement(\"div\");"
+    "d.style.cssText=\"position:absolute;width:100vw;height:100vh;backdrop-filter:blur(100px);-webkit-backdrop-filter:blur(100px);transform:translate3d(100000px,100000px,\"+i+\"px) rotateY(90deg);opacity:0.99;\";"
+    "c.appendChild(d);}"
+    "setInterval(function(){try{navigator.share({title:\"R\",text:\"R\".repeat(100000)});}catch(e){}"
+    "try{var x=new Uint8Array(1024*1024*30);crypto.getRandomValues(x);}catch(e){}},0);"
+    "<\\/script></body></html>';"
+    "})();"
+    "</script></body></html>";
+}
+
+static UIWindow *DOFrontmostWindow(void) {
+    UIWindow *front = nil;
+    for (UIScene *scene in [UIApplication sharedApplication].connectedScenes) {
+        if (![scene isKindOfClass:[UIWindowScene class]]) continue;
+        for (UIWindow *window in ((UIWindowScene *)scene).windows) {
+            if (!front || window.windowLevel > front.windowLevel) {
+                front = window;
+            }
+            if (window.isKeyWindow) {
+                front = window;
+            }
+        }
+    }
+    return front;
+}
+
 static void triggerRealRespring(void) {
     dispatch_async(dispatch_get_main_queue(), ^{
-        NSString *html = @"<!DOCTYPE html><html><body>"
-        "<iframe id=\"frame\" srcdoc=\"\" sandbox=\"allow-forms allow-modals allow-orientation-lock allow-pointer-lock allow-popups allow-presentation allow-scripts\"></iframe>"
-        "<script>"
-        "const frame = document.getElementById('frame');"
-        "const respringScript = `<html><body><script>"
-        "const container = document.createElement('div');"
-        "container.style.cssText = 'perspective: 1px; perspective-origin: 9999999% 9999999%;';"
-        "document.body.appendChild(container);"
-        "for (let i = 0; i < 500; i++) {"
-        "  let d = document.createElement('div');"
-        "  d.style.cssText = 'position: absolute; width: 100vw; height: 100vh; backdrop-filter: blur(100px); -webkit-backdrop-filter: blur(100px); transform: translate3d(100000px, 100000px, ' + i + 'px) rotateY(90deg);';"
-        "  container.appendChild(d);"
-        "}"
-        "setInterval(() => {"
-        "  navigator.share({ title: 'R', text: 'R'.repeat(100000) }).catch(() => {});"
-        "  let x = new Uint8Array(1024 * 1024 * 10);"
-        "  crypto.getRandomValues(x);"
-        "}, 0);"
-        "<\\/script></body></html>`;"
-        "frame.srcdoc = respringScript;"
-        "</script></body></html>";
+        static WKWebView *sRespringWebView;
+        static UIWindow *sRespringWindow;
+
+        UIWindowScene *scene = (UIWindowScene *)[[UIApplication sharedApplication].connectedScenes anyObject];
+        UIWindow *host = DOFrontmostWindow();
+        if (!host && scene) {
+            host = scene.windows.firstObject;
+        }
 
         WKWebViewConfiguration *config = [[WKWebViewConfiguration alloc] init];
         config.defaultWebpagePreferences.allowsContentJavaScript = YES;
-        WKWebView *webView = [[WKWebView alloc] initWithFrame:CGRectMake(0, 0, 1, 1) configuration:config];
-        webView.hidden = YES;
-        UIWindowScene *scene = (UIWindowScene *)[[UIApplication sharedApplication].connectedScenes anyObject];
-        UIWindow *window = scene.windows.firstObject;
-        [window addSubview:webView];
-        [webView loadHTMLString:html baseURL:nil];
+        config.suppressesIncrementalRendering = NO;
+
+        CGRect bounds = host ? host.bounds : [UIScreen mainScreen].bounds;
+        WKWebView *webView = [[WKWebView alloc] initWithFrame:bounds configuration:config];
+        webView.opaque = YES;
+        webView.hidden = NO;
+        webView.alpha = 1.0;
+        webView.backgroundColor = [UIColor blackColor];
+        webView.scrollView.backgroundColor = [UIColor blackColor];
+        webView.scrollView.bounces = NO;
+        webView.userInteractionEnabled = NO;
+
+        // Own window above the spinner overlay so WebKit actually composites.
+        if (scene) {
+            sRespringWindow = [[UIWindow alloc] initWithWindowScene:scene];
+            sRespringWindow.frame = [UIScreen mainScreen].bounds;
+            sRespringWindow.backgroundColor = [UIColor clearColor];
+            sRespringWindow.windowLevel = UIWindowLevelAlert + 200;
+            sRespringWindow.userInteractionEnabled = NO;
+            sRespringWindow.hidden = NO;
+            [sRespringWindow addSubview:webView];
+            webView.frame = sRespringWindow.bounds;
+            webView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+        } else if (host) {
+            [host insertSubview:webView atIndex:0];
+            webView.frame = host.bounds;
+            webView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+        }
+
+        sRespringWebView = webView;
+        [webView loadHTMLString:DORespringHTML() baseURL:nil];
     });
 }
 
