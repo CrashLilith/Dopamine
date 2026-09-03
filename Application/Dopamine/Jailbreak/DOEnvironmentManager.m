@@ -277,9 +277,17 @@ extern char **environ;
 - (void)setJailbroken:(BOOL)jailbroken withVersion:(NSString *)version
 {
     _isJailbroken = jailbroken;
-    if (_isJailbroken) _jailbrokenVersion = version;
+    if (_isJailbroken) {
+        _jailbrokenVersion = version;
+    } else {
+        _jailbrokenVersion = nil;
+    }
     [[NSUserDefaults standardUserDefaults] setBool:jailbroken forKey:@"fakeJailbroken"];
-    if (version) [[NSUserDefaults standardUserDefaults] setObject:version forKey:@"fakeJailbrokenVersion"];
+    if (jailbroken && version) {
+        [[NSUserDefaults standardUserDefaults] setObject:version forKey:@"fakeJailbrokenVersion"];
+    } else if (!jailbroken) {
+        [[NSUserDefaults standardUserDefaults] removeObjectForKey:@"fakeJailbrokenVersion"];
+    }
     [[NSUserDefaults standardUserDefaults] synchronize];
 }
 

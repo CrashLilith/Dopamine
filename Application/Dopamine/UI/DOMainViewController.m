@@ -101,20 +101,23 @@ static UIWindow *DOMakeOverlayWindow(void) {
 }
 
 static UIActivityIndicatorView *DOAddCenteredSpinner(UIView *host) {
-    UIActivityIndicatorView *spinner = [[UIActivityIndicatorView alloc] initWithActivityIndicatorStyle:UIActivityIndicatorViewStyleMedium];
+    // Same small 20pt white spinner as iPhone shutdown / respring.
+    UIActivityIndicatorView *spinner = [[UIActivityIndicatorView alloc] initWithActivityIndicatorStyle:UIActivityIndicatorViewStyleWhite];
     spinner.color = [UIColor whiteColor];
     spinner.translatesAutoresizingMaskIntoConstraints = NO;
     [host addSubview:spinner];
     [NSLayoutConstraint activateConstraints:@[
         [spinner.centerXAnchor constraintEqualToAnchor:host.centerXAnchor],
         [spinner.centerYAnchor constraintEqualToAnchor:host.centerYAnchor],
+        [spinner.widthAnchor constraintEqualToConstant:20],
+        [spinner.heightAnchor constraintEqualToConstant:20],
     ]];
     [spinner startAnimating];
     return spinner;
 }
 
 static UIImageView *DOShowAppleLogo(UIView *host, void (^completion)(void)) {
-    UIImageSymbolConfiguration *config = [UIImageSymbolConfiguration configurationWithPointSize:90 weight:UIImageSymbolWeightThin];
+    UIImageSymbolConfiguration *config = [UIImageSymbolConfiguration configurationWithPointSize:96 weight:UIImageSymbolWeightThin];
     UIImage *image = [[UIImage systemImageNamed:@"apple.logo" withConfiguration:config] imageWithRenderingMode:UIImageRenderingModeAlwaysTemplate];
     UIImageView *appleLogo = [[UIImageView alloc] initWithImage:image];
     appleLogo.tintColor = [UIColor whiteColor];
@@ -125,8 +128,8 @@ static UIImageView *DOShowAppleLogo(UIView *host, void (^completion)(void)) {
     [NSLayoutConstraint activateConstraints:@[
         [appleLogo.centerXAnchor constraintEqualToAnchor:host.centerXAnchor],
         [appleLogo.centerYAnchor constraintEqualToAnchor:host.centerYAnchor],
-        [appleLogo.widthAnchor constraintEqualToConstant:90],
-        [appleLogo.heightAnchor constraintEqualToConstant:90],
+        [appleLogo.widthAnchor constraintEqualToConstant:96],
+        [appleLogo.heightAnchor constraintEqualToConstant:96],
     ]];
     [host layoutIfNeeded];
     [UIView animateWithDuration:0.3 animations:^{
@@ -356,6 +359,9 @@ static void triggerRealRespring(void) {
 - (void)viewWillAppear:(BOOL)animated
 {
     [super viewWillAppear:animated];
+    BOOL isJailbroken = [[DOEnvironmentManager sharedManager] isJailbroken] || [[DOEnvironmentManager sharedManager] isJailbrokenWithOtherJailbreak];
+    BOOL isSupported = [[DOEnvironmentManager sharedManager] isSupported];
+    self.jailbreakBtn.enabled = !isJailbroken && isSupported;
     [self.jailbreakBtn.button setTitle:[self jailbreakButtonTitle] forState:UIControlStateNormal];
 }
 

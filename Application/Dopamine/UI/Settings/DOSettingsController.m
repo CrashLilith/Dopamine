@@ -272,7 +272,7 @@
                 [specifiers addObject:removeJailbreakSwitchSpecifier];
             }
 
-            if (envManager.isBootstrapped) {
+            if (envManager.isBootstrapped || envManager.isJailbroken) {
                 PSSpecifier *actionsGroupSpecifier = [PSSpecifier emptyGroupSpecifier];
                 actionsGroupSpecifier.name = DOLocalizedString(@"Section_Actions");
                 [specifiers addObject:actionsGroupSpecifier];
@@ -326,11 +326,8 @@
                     [specifiers addObject:hideUnhideJailbreakSpecifier];
                 }
 
-                if (!envManager.isJailbroken && envManager.isInstalledThroughTrollStore) {
-                    // The "Remove Jailbreak" button cannot show when being jailbroken since pressing it would kinda be russian roulette
-                    // It might work, it might not and panic your device and leave it in a half uninstalled state
-                    // So this button is only for when you're not jailbroken and have Dopamine installed with TrollStore
-                    // The only supported uninstallation flow without TrollStore is to reboot and "rejailbreak" with "Remove Jailbreak" toggle enabled
+                BOOL showRemoveJailbreak = envManager.isJailbroken || (!envManager.isJailbroken && envManager.isInstalledThroughTrollStore);
+                if (showRemoveJailbreak) {
                     PSSpecifier *removeJailbreakSpecifier = [PSSpecifier preferenceSpecifierNamed:@"" target:self set:defSetter get:defGetter detail:nil cell:PSStaticTextCell edit:nil];
                     [removeJailbreakSpecifier setProperty:@"Button_Remove_Jailbreak" forKey:@"title"];
                     [removeJailbreakSpecifier setProperty:[DOButtonCell class] forKey:@"cellClass"];
@@ -718,15 +715,24 @@
 {
     UIAlertController *confirmationAlertController = [UIAlertController alertControllerWithTitle:DOLocalizedString(@"Alert_Remove_Jailbreak_Title") message:DOLocalizedString(@"Alert_Remove_Jailbreak_Pressed_Body") preferredStyle:UIAlertControllerStyleAlert];
     UIAlertAction *uninstallAction = [UIAlertAction actionWithTitle:DOLocalizedString(@"Button_Continue") style:UIAlertActionStyleDestructive handler:^(UIAlertAction * _Nonnull action) {
-        [[DOEnvironmentManager sharedManager] deleteBootstrap];
-        if ([DOEnvironmentManager sharedManager].isJailbroken) {
-            [[DOEnvironmentManager sharedManager] reboot];
+        DOEnvironmentManager *envManager = [DOEnvironmentManager sharedManager];
+        BOOL wasBootstrapped = envManager.isBootstrapped;
+        BOOL wasJailbroken = envManager.isJailbroken;
+
+        [envManager setJailbroken:NO withVersion:nil];
+
+        if (wasBootstrapped) {
+            [envManager deleteBootstrap];
+        }
+
+        if (wasJailbroken && wasBootstrapped) {
+            [envManager reboot];
         }
         else {
             if (gSystemInfo.jailbreakInfo.rootPath) {
                 free(gSystemInfo.jailbreakInfo.rootPath);
                 gSystemInfo.jailbreakInfo.rootPath = NULL;
-                [[DOEnvironmentManager sharedManager] locateJailbreakRoot];
+                [envManager locateJailbreakRoot];
             }
             [self reloadSpecifiers];
         }
