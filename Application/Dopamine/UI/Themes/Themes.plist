@@ -90,5 +90,37 @@
 		<key>titleShadow</key>
 		<false/>
 	</dict>
+	<dict>
+		<key>key</key>
+		<string>custom</string>
+		<key>name</key>
+		<string>Custom</string>
+		<key>image</key>
+		<string>Background_Custom.jpg</string>
+		<key>actionMenuColor</key>
+		<string>5F0D2428</string>
+		<key>windowColor</key>
+		<string>60060E12</string>
+		<key>blur</key>
+		<integer>22</integer>
+		<key>titleShadow</key>
+		<false/>
+	</dict>
+	<dict>
+		<key>key</key>
+		<string>obsidian</string>
+		<key>name</key>
+		<string>Crying Obsidian</string>
+		<key>image</key>
+		<string>Background_Obsidian.jpg</string>
+		<key>actionMenuColor</key>
+		<string>4F120818</string>
+		<key>windowColor</key>
+		<string>80080510</string>
+		<key>blur</key>
+		<integer>6</integer>
+		<key>titleShadow</key>
+		<true/>
+	</dict>
 </array>
 </plist>
